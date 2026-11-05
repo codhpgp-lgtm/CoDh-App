@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CoDH App V.1.0 - Integrated Request System</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React & ReactDOM CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <!-- Babel Standalone for JSX compilation -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100">
+  <div id="root"></div>
+
+  <!-- Firebase Integration Scripts -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, updateDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Global App and Firebase initialization
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'codh-app-v1';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+      apiKey: "demo-api-key",
+      authDomain: "codh-app.firebaseapp.com",
+      projectId: "codh-app",
+      storageBucket: "codh-app.appspot.com",
+      messagingSenderId: "123456789",
+      appId: "1:123456789:web:abcdef"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    window.FirebaseDB = db;
+    window.FirebaseAuth = auth;
+    window.FirebaseAppId = appId;
+    window.FirebaseMethods = { doc, setDoc, updateDoc, deleteDoc, onSnapshot, collection };
+
+    // Authenticate user anonymously or with token
+    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+      signInWithCustomToken(auth, __initial_auth_token).catch(() => signInAnonymously(auth));
+    } else {
+      signInAnonymously(auth);
+    }
+  </script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    // --- SVG ICON COMPONENT ---
+    const Icon = ({ name, className = "w-4 h-4" }) => {
+      const icons = {
+        'bell': <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0" />,
+        'check-circle': <g><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></g>,
+        'x-circle': <g><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></g>,
+        'clock': <g><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></g>,
+        'user': <g><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></g>,
+        'calendar': <g><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></g>,
+        'file-text': <g><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></g>,
+        'user-check': <g><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></g>,
+        'search': <g><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></g>,
+        'plus': <g><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></g>,
+        'printer': <g><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></g>,
+        'chevron-right': <polyline points="9 18 15 12 9 6"/>,
+        'logout': <g><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></g>,
+        'send': <g><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></g>,
+        'check': <polyline points="20 6 9 17 4 12"/>,
+        'x': <g><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></g>,
+        'tag': <g><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></g>,
+        'paperclip': <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>,
+        'layers': <g><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></g>,
+        'award': <g><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></g>,
+        'alert-circle': <g><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></g>,
+        'eye': <g><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></g>,
+        'sliders': <g><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></g>,
+        'sparkles': <path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z"/>,
+        'shield-check': <g><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></g>,
+        'users': <g><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></g>,
+        'edit': <g><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></g>,
+        'trash-2': <g><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></g>,
+        'archive': <g><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></g>,
+        'power': <g><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></g>
+      };
+
+      return (
+        <svg 
+          xmlns="http://www.w3.org/2000/svg" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="currentColor" 
+          strokeWidth="2" 
+          strokeLinecap="round" 
+          strokeLinejoin="round" 
+          className={className}
+        >
+          {icons[name] || null}
+        </svg>
+      );
+    };
+
+    // --- INITIAL MOCK DATA ---
+    const INITIAL_EMPLOYEES = [
+      { id: 'emp-admin', name: 'Khean Lisondra', email: 'kheanlisondrafinal@gmail.com', role: 'Admin', dept: 'System Administration', title: 'System Administrator', avatar: '', password: 'password123', status: 'Approved' },
+      { id: 'emp-101', name: 'Juan Cruz', email: 'juan.cruz@company.com', role: 'Employee', dept: 'Medical Section', title: 'Senior Medical Specialist', avatar: '', password: 'password123', status: 'Approved' },
+      { id: 'mgr-201', name: 'Alex Reyes', email: 'alex.reyes@company.com', role: 'Department Head', dept: 'Medical Section', headOfDept: 'Medical Section', title: 'Chief Medical Supervisor', avatar: '', password: 'password123', status: 'Approved' },
+      { id: 'admin-off-5', name: 'Atty. Clara Vance', email: 'clara.vance@hospital.gov', role: 'Administrative Officer V', dept: 'Administrative Section', title: 'Administrative Officer V', avatar: '', password: 'password123', status: 'Approved' },
+      { id: 'chief-hosp', name: 'Dr. Roberto Mendoza', email: 'roberto.mendoza@hospital.gov', role: 'Chief of Hospital', dept: 'Executive Office', title: 'Chief of Hospital', avatar: '', password: 'password123', status: 'Approved' }
+    ];
+
+    const HOSPITAL_DEPARTMENTS = [
+      'Medical Section',
+      'Administrative Section',
+      'Nursing Section',
+      'Pharmacy Section',
+      'Radiology Section',
+      'Laboratory Section'
+    ];
+
+    const INITIAL_REQUESTS = [
+      {
+        id: 'REQ-2026-001',
+        type: 'Leave',
+        subType: 'Vacation Leave',
+        section: 'Medical Section',
+        applicantId: 'emp-101',
+        applicantName: 'Juan Cruz',
+        dateFiled: '2026-10-25 09:30 AM',
+        startDate: '2026-11-02',
+        endDate: '2026-11-04',
+        totalDays: 3,
+        reason: 'Annual medical research conference attendance.',
+        status: 'Pending Dept Head Approval',
+        deptHeadApproval: 'Pending',
+        finalApproval: 'Pending',
+        taggedUsers: ['mgr-201', 'chief-hosp'],
+        logs: [{ date: '2026-10-25 09:30 AM', action: 'Submitted by Juan Cruz', user: 'Juan Cruz' }]
+      },
+      {
+        id: 'REQ-2026-002',
+        type: 'Missed Log',
+        subType: 'Time-In & Time-Out Correction',
+        section: 'Administrative Section',
+        applicantId: 'emp-101',
+        applicantName: 'Juan Cruz',
+        dateFiled: '2026-10-26 10:15 AM',
+        logDate: '2026-10-24',
+        timeIn: '08:30 AM',
+        timeOut: '05:30 PM',
+        reason: 'Biometrics machine maintenance on Administrative floor.',
+        status: 'Approved',
+        deptHeadApproval: 'Approved',
+        finalApproval: 'Approved',
+        attachmentName: 'biometrics_log_proof.png',
+        taggedUsers: ['admin-off-5', 'chief-hosp'],
+        approvedBy: 'Atty. Clara Vance & Dr. Roberto Mendoza',
+        approvalDate: '2026-10-26 02:00 PM',
+        logs: [
+          { date: '2026-10-26 10:15 AM', action: 'Submitted by Juan Cruz', user: 'Juan Cruz' },
+          { date: '2026-10-26 11:30 AM', action: 'Approved by Dept Head (Alex Reyes)', user: 'Alex Reyes' },
+          { date: '2026-10-26 02:00 PM', action: 'Final Approval by Atty. Clara Vance', user: 'Atty. Clara Vance' }
+        ]
+      }
+    ];
+
+    function App() {
+      const [employees, setEmployees] = useState(INITIAL_EMPLOYEES);
+      const [isAuthenticated, setIsAuthenticated] = useState(false);
+      const [currentUser, setCurrentUser] = useState(null);
+      const [authMode, setAuthMode] = useState('signin');
+      
+      const [loginEmail, setLoginEmail] = useState('');
+      const [loginPassword, setLoginPassword] = useState('');
+
+      const [regForm, setRegForm] = useState({
+        name: '', email: '', role: 'Employee', dept: 'Medical Section', password: '', confirmPassword: ''
+      });
+
+      const [requests, setRequests] = useState(INITIAL_REQUESTS);
+      const [userArchiveCopies, setUserArchiveCopies] = useState([]);
+      const [notifications, setNotifications] = useState([]);
+      const [showNotifPanel, setShowNotifPanel] = useState(false);
+
+      const [activeTab, setActiveTab] = useState('dashboard');
+      const [selectedRequestForModal, setSelectedRequestForModal] = useState(null);
+      const [printModalRequest, setPrintModalRequest] = useState(null);
+      const [editingUser, setEditingUser] = useState(null);
+      const [toast, setToast] = useState(null);
+
+      // --- FIREBASE FIRESTORE REAL-TIME LISTENERS ---
+      useEffect(() => {
+        if (!window.FirebaseDB) return;
+        const db = window.FirebaseDB;
+        const appId = window.FirebaseAppId;
+        const { collection, onSnapshot } = window.FirebaseMethods;
+
+        // 1. Sync Users Collection
+        const usersCol = collection(db, 'artifacts', appId, 'public', 'data', 'users');
+        const unsubUsers = onSnapshot(usersCol, (snapshot) => {
+          if (!snapshot.empty) {
+            const dbUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setEmployees(dbUsers);
+          }
+        }, (err) => console.log('Firestore users sub:', err));
+
+        // 2. Sync Requests Collection
+        const reqsCol = collection(db, 'artifacts', appId, 'public', 'data', 'requests');
+        const unsubReqs = onSnapshot(reqsCol, (snapshot) => {
+          if (!snapshot.empty) {
+            const dbReqs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setRequests(dbReqs);
+          }
+        }, (err) => console.log('Firestore requests sub:', err));
+
+        // 3. Sync Notifications Collection
+        const notifsCol = collection(db, 'artifacts', appId, 'public', 'data', 'notifications');
+        const unsubNotifs = onSnapshot(notifsCol, (snapshot) => {
+          if (!snapshot.empty) {
+            const dbNotifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setNotifications(dbNotifs);
+          }
+        }, (err) => console.log('Firestore notifs sub:', err));
+
+        // 4. Sync Archives Collection
+        const archivesCol = collection(db, 'artifacts', appId, 'public', 'data', 'archives');
+        const unsubArchives = onSnapshot(archivesCol, (snapshot) => {
+          if (!snapshot.empty) {
+            const dbArchives = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setUserArchiveCopies(dbArchives);
+          }
+        }, (err) => console.log('Firestore archives sub:', err));
+
+        return () => {
+          unsubUsers();
+          unsubReqs();
+          unsubNotifs();
+          unsubArchives();
+        };
+      }, []);
+
+      const triggerToast = (msg, type = 'success') => {
+        setToast({ msg, type });
+        setTimeout(() => setToast(null), 4000);
+      };
+
+      const handleLogin = (e) => {
+        e.preventDefault();
+        const user = employees.find((emp) => emp.email.toLowerCase() === loginEmail.toLowerCase().trim());
+        if (!user) return triggerToast('Account not found.', 'error');
+        if (user.password !== loginPassword) return triggerToast('Invalid password.', 'error');
+        if (user.status === 'Pending') return triggerToast('Account pending admin approval.', 'error');
+        if (user.status === 'Deactivated') return triggerToast('Account deactivated by system admin.', 'error');
+
+        setCurrentUser(user);
+        setIsAuthenticated(true);
+        triggerToast(`Welcome back, ${user.name}!`);
+      };
+
+      const handleRegister = async (e) => {
+        e.preventDefault();
+        if (!regForm.name || !regForm.email || !regForm.password) {
+          return triggerToast('Please fill in required fields.', 'error');
+        }
+        if (regForm.password.length !== 6) {
+          return triggerToast('Password must be exactly 6 characters.', 'error');
+        }
+        if (regForm.password !== regForm.confirmPassword) {
+          return triggerToast('Passwords do not match.', 'error');
+        }
+
+        let assignedDept = regForm.dept;
+        if (regForm.role === 'Chief of Hospital') assignedDept = 'Executive Office';
+        if (regForm.role === 'Administrative Officer V') assignedDept = 'Administrative Section';
+        if (regForm.role === 'Department Head') assignedDept = 'Pending Assignment';
+
+        const newId = `emp-${Date.now()}`;
+        const newEmp = {
+          id: newId,
+          name: regForm.name,
+          email: regForm.email,
+          role: regForm.role,
+          dept: assignedDept,
+          headOfDept: regForm.role === 'Department Head' ? assignedDept : null,
+          title: `${assignedDept} ${regForm.role}`,
+          password: regForm.password,
+          status: 'Pending'
+        };
+
+        // Save to Firebase Firestore
+        if (window.FirebaseDB) {
+          const { doc, setDoc } = window.FirebaseMethods;
+          await setDoc(doc(window.FirebaseDB, 'artifacts', window.FirebaseAppId, 'public', 'data', 'users', newId), newEmp);
+        }
+
+        setEmployees([...employees, newEmp]);
+        triggerToast(`Registered as ${regForm.role}. Saved to Cloud! Pending Admin activation.`);
+        setAuthMode('signin');
+      };
+
+      // --- USER MANAGEMENT CONTROLS (ADMIN ONLY) ---
+      const handleDeleteUser = async (userId) => {
+        if (window.FirebaseDB) {
+          const { doc, deleteDoc } = window.FirebaseMethods;
+          await deleteDoc(doc(window.FirebaseDB, 'artifacts', window.FirebaseAppId, 'public', 'data', 'users', userId));
+        }
+        setEmployees(prev => prev.filter(u => u.id !== userId));
+        triggerToast('User account deleted from Firestore.');
+      };
+
+      const handleToggleUserStatus = async (userId) => {
+        const target = employees.find(u => u.id === userId);
+        if (!target) return;
+        const nextStatus = target.status === 'Deactivated' ? 'Approved' : 'Deactivated';
+
+        if (window.FirebaseDB) {
+          const { doc, updateDoc } = window.FirebaseMethods;
+          await updateDoc(doc(window.FirebaseDB, 'artifacts', window.FirebaseAppId, 'public', 'data', 'users', userId), { status: nextStatus });
+        }
+        setEmployees(prev => prev.map(u => u.id === userId ? { ...u, status: nextStatus } : u));
+        triggerToast(`User status set to ${nextStatus}.`);
+      };
+
+      const handleSaveEditedUser = async (e) => {
+        e.preventDefault();
+        if (window.FirebaseDB) {
+          const { doc, setDoc } = window.FirebaseMethods;
+          await setDoc(doc(window.FirebaseDB, 'artifacts', window.FirebaseAppId, 'public', 'data', 'users', editingUser.id), editingUser);
+        }
+        setEmployees(prev => prev.map(u => u.id === editingUser.id ? editingUser : u));
+        setEditingUser(null);
+        triggerToast('User details saved to Firestore!');
+      };
+
+      // --- WORKFLOW APPROVAL LOGIC ---
+      const handleApprovalAction = async (reqId, actionType) => {
+        const timeNow = new Date().toLocaleString();
+        let updatedReq = null;
+
+        const targetReq = requests.find(r => r.id === reqId);
+        if (!targetReq) return;
+
+        let nextStatus = targetReq.status;
+        let nextDeptApproval = targetReq.deptHeadApproval;
+        let nextFinalApproval = targetReq.finalApproval;
+
+        if (actionType === 'REJECT') {
+          nextStatus = 'Rejected';
+          if (currentUser.role === 'Department Head') nextDeptApproval = 'Rejected';
+          else nextFinalApproval = 'Rejected';
+        } else if (actionType === 'APPROVE') {
+          if (currentUser.role === 'Department Head') {
+            nextDeptApproval = 'Approved';
+            nextStatus = 'Pending Final Officer Approval';
+          } else {
+            nextFinalApproval = 'Approved';
+            nextStatus = 'Approved';
+          }
+        }
+
+        updatedReq = {
+          ...targetReq,
+          status: nextStatus,
+          deptHeadApproval: nextDeptApproval,
+          finalApproval: nextFinalApproval,
+          approvedBy: currentUser.name,
+          approvalDate: timeNow,
+          logs: [...(targetReq.logs || []), { date: timeNow, action: `${actionType} by ${currentUser.name} (${currentUser.role})`, user: currentUser.name }]
+        };
+
+        // Save updated request state to Firestore
+        if (window.FirebaseDB) {
+          const { doc, setDoc } = window.FirebaseMethods;
+          await setDoc(doc(window.FirebaseDB, 'artifacts', window.FirebaseAppId, 'public', 'data', 'requests', reqId), updatedReq);
+
+          // Push Cloud Notification
+          const notifId = `notif-${Date.now()}`;
+          await setDoc(doc(window.FirebaseDB, 'artifacts', window.FirebaseAppId, 'public', 'data', 'notifications', notifId), {
+            id: notifId,
+            userId: updatedReq.applicantId,
+            title: `Request Status Updated`,
+            message: `Your application (${updatedReq.id}) has been updated to "${updatedReq.status}" by ${currentUser.name}.`,
+            date: timeNow,
+            read: false
+          });
+
+          // Save Archival Copy if completed
+          if (['Approved', 'Rejected'].includes(updatedReq.status)) {
+            const arcId = `ARCH-${Date.now()}`;
+            await setDoc(doc(window.FirebaseDB, 'artifacts', window.FirebaseAppId, 'public', 'data', 'archives', arcId), {
+              id: arcId,
+              originalReqId: updatedReq.id,
+              applicantId: updatedReq.applicantId,
+              applicantName: updatedReq.applicantName,
+              type: updatedReq.type,
+              section: updatedReq.section,
+              status: updatedReq.status,
+              archivedDate: timeNow,
+              reason: updatedReq.reason
+            });
+          }
+        }
+
+        if (updatedReq.status === 'Approved') setPrintModalRequest(updatedReq);
+        triggerToast(`Workflow synced to Firebase Cloud.`);
+      };
+
+      const handleFormSubmit = async (e) => {
+        e.preventDefault();
+        const newId = `REQ-2026-${String(requests.length + 1).padStart(3, '0')}`;
+        const timeNow = new Date().toLocaleString();
+
+        const newReq = {
+          id: newId,
+          type: formType,
+          subType: formData.subType,
+          section: formData.section,
+          applicantId: currentUser.id,
+          applicantName: currentUser.name,
+          dateFiled: timeNow,
+          logDate: formData.logDate,
+          timeIn: formData.timeIn,
+          timeOut: formData.timeOut,
+          startDate: formData.startDate,
+          endDate: formData.endDate,
+          extraOffDate: formData.extraOffDate,
+          reason: formData.reason,
+          attachmentName: formData.attachment ? formData.attachment.name : null,
+          status: 'Pending Dept Head Approval',
+          deptHeadApproval: 'Pending',
+          finalApproval: 'Pending',
+          logs: [{ date: timeNow, action: `Submitted by ${currentUser.name}`, user: currentUser.name }]
+        };
+
+        if (window.FirebaseDB) {
+          const { doc, setDoc } = window.FirebaseMethods;
+          await setDoc(doc(window.FirebaseDB, 'artifacts', window.FirebaseAppId, 'public', 'data', 'requests', newId), newReq);
+        }
+
+        setRequests([newReq, ...requests]);
+        triggerToast(`Request ${newId} saved to Cloud and sent to Dept Head!`);
+        setActiveTab('dashboard');
+      };
+
+      const isApprover = useMemo(() => {
+        if (!currentUser) return false;
+        return ['Department Head', 'Human Resource', 'Administrative Officer V', 'Chief of Hospital', 'Admin'].includes(currentUser.role);
+      }, [currentUser]);
+
+      const visibleRequests = useMemo(() => {
+        if (!currentUser) return [];
+        return requests.filter((req) => {
+          if (currentUser.role === 'Admin') return true;
+          if (currentUser.role === 'Employee' && req.applicantId !== currentUser.id) return false;
+          if (currentUser.role === 'Department Head' && req.section !== (currentUser.headOfDept || currentUser.dept)) return false;
+          if (currentUser.role === 'Administrative Officer V' && req.section !== 'Administrative Section') return false;
+          return true;
+        });
+      }, [requests, currentUser]);
+
+      const myArchivedCopies = useMemo(() => {
+        if (!currentUser) return [];
+        return userArchiveCopies.filter(c => c.applicantId === currentUser.id);
+      }, [userArchiveCopies, currentUser]);
+
+      const userNotifs = useMemo(() => {
+        if (!currentUser) return [];
+        return notifications.filter(n => n.userId === currentUser.id);
+      }, [notifications, currentUser]);
+
+      const userUnreadNotifs = useMemo(() => {
+        if (!currentUser) return [];
+        return notifications.filter(n => n.userId === currentUser.id && !n.read);
+      }, [notifications, currentUser]);
+
+      if (!isAuthenticated) {
+        return (
+          <div className="min-h-screen flex items-center justify-center p-6 bg-slate-950">
+            {toast && (
+              <div className="fixed top-5 right-5 z-50 p-4 rounded-xl bg-indigo-900 border border-indigo-500 text-white text-xs shadow-2xl">
+                {toast.msg}
+              </div>
+            )}
+            <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 space-y-6 shadow-2xl">
+              <div className="text-center space-y-2">
+                <div className="inline-flex p-3 rounded-2xl bg-indigo-600 shadow-lg mb-1">
+                  <Icon name="layers" className="w-8 h-8 text-white" />
+                </div>
+                <h1 className="text-2xl font-black text-white">CoDH App V.1.0</h1>
+                <p className="text-xs text-slate-400">Faster requests, transparent approvals, better hospital management.</p>
+              </div>
+
+              <div className="grid grid-cols-2 p-1 bg-slate-950 rounded-2xl border border-slate-800">
+                <button 
+                  onClick={() => setAuthMode('signin')} 
+                  className={`py-2 text-xs font-bold rounded-xl transition-all ${authMode === 'signin' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}
+                >
+                  Sign In
+                </button>
+                <button 
+                  onClick={() => setAuthMode('register')} 
+                  className={`py-2 text-xs font-bold rounded-xl transition-all ${authMode === 'register' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}
+                >
+                  Register
+                </button>
+              </div>
+
+              {authMode === 'signin' ? (
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div>
+                    <label className="text-xs text-slate-300 block mb-1">Email Address</label>
+                    <input 
+                      type="email" required value={loginEmail} 
+                      onChange={e => setLoginEmail(e.target.value)}
+                      placeholder="Enter your email"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-300 block mb-1">Password</label>
+                    <input 
+                      type="password" required value={loginPassword} 
+                      onChange={e => setLoginPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-3 rounded-xl shadow-lg">
+                    Log In
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleRegister} className="space-y-3">
+                  <div>
+                    <label className="text-xs text-slate-300 block mb-1">Full Name</label>
+                    <input 
+                      type="text" required placeholder="e.g. Dr. Alexander Wright" value={regForm.name} 
+                      onChange={e => setRegForm({...regForm, name: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-300 block mb-1">Email Address</label>
+                    <input 
+                      type="email" required placeholder="user@hospital.gov.ph" value={regForm.email} 
+                      onChange={e => setRegForm({...regForm, email: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                    />
+                  </div>
+
+                  {/* SPECIFIC ROLE SELECTION */}
+                  <div>
+                    <label className="text-xs text-slate-300 block mb-1">Select Assigned Role</label>
+                    <select 
+                      value={regForm.role} 
+                      onChange={e => setRegForm({...regForm, role: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                    >
+                      <option value="Employee">Employee</option>
+                      <option value="Department Head">Department Head</option>
+                      <option value="Administrative Officer V">Administrative Officer V</option>
+                      <option value="Chief of Hospital">Chief of Hospital</option>
+                    </select>
+                  </div>
+
+                  {/* DEPARTMENT TAGGING ONLY FOR NON-DEPT HEAD / SPECIAL ROLES */}
+                  {['Employee'].includes(regForm.role) && (
+                    <div>
+                      <label className="text-xs text-slate-300 block mb-1">Hospital Department / Section</label>
+                      <select 
+                        value={regForm.dept} 
+                        onChange={e => setRegForm({...regForm, dept: e.target.value})}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                      >
+                        {HOSPITAL_DEPARTMENTS.map(d => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {regForm.role === 'Department Head' && (
+                    <div className="p-2.5 bg-amber-950/40 border border-amber-500/30 rounded-xl text-[11px] text-amber-200 flex items-center space-x-2">
+                      <Icon name="tag" className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                      <span>Note: Admin will tag your assigned hospital department upon account activation.</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-xs text-slate-300 block">Password</label>
+                        <span className={`text-[10px] font-bold ${regForm.password.length === 6 ? 'text-emerald-400' : 'text-slate-400'}`}>
+                          {regForm.password.length}/6
+                        </span>
+                      </div>
+                      <input 
+                        type="password" required maxLength="6" placeholder="6 chars" value={regForm.password} 
+                        onChange={e => setRegForm({...regForm, password: e.target.value})}
+                        className={`w-full bg-slate-950 border rounded-xl px-3 py-2 text-xs text-white focus:outline-none ${regForm.password && regForm.password.length !== 6 ? 'border-rose-500/60' : 'border-slate-800 focus:border-indigo-500'}`}
+                      />
+                    </div>
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-xs text-slate-300 block">Confirm</label>
+                        <span className={`text-[10px] font-bold ${regForm.confirmPassword && regForm.confirmPassword === regForm.password && regForm.confirmPassword.length === 6 ? 'text-emerald-400' : 'text-slate-400'}`}>
+                          {regForm.confirmPassword.length}/6
+                        </span>
+                      </div>
+                      <input 
+                        type="password" required maxLength="6" placeholder="6 chars" value={regForm.confirmPassword} 
+                        onChange={e => setRegForm({...regForm, confirmPassword: e.target.value})}
+                        className={`w-full bg-slate-950 border rounded-xl px-3 py-2 text-xs text-white focus:outline-none ${regForm.confirmPassword && regForm.confirmPassword !== regForm.password ? 'border-rose-500/60' : 'border-slate-800 focus:border-indigo-500'}`}
+                      />
+                    </div>
+                  </div>
+                  <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-3 rounded-xl mt-2 transition-all shadow-lg">
+                    Submit Registration Request
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="min-h-screen bg-slate-900 font-sans flex flex-col md:flex-row">
+          {toast && (
+            <div className="fixed top-5 right-5 z-50 p-4 rounded-xl bg-indigo-900 border border-indigo-500 text-white text-xs shadow-2xl">
+              {toast.msg}
+            </div>
+          )}
+
+          {/* SIDEBAR */}
+          <aside className="w-full md:w-72 bg-slate-950 border-r border-slate-800 flex flex-col">
+            <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 rounded-xl bg-indigo-600 text-white">
+                  <Icon name="layers" className="w-6 h-6" />
+                </div>
+                <div>
+                  <h1 className="font-bold text-base text-white">CoDH App V.1.0</h1>
+                  <p className="text-[10px] text-slate-400">Coron District Hospital</p>
+                </div>
+              </div>
+
+              {/* NOTIFICATION BELL */}
+              <div className="relative">
+                <button 
+                  onClick={() => setShowNotifPanel(!showNotifPanel)}
+                  className="p-2 text-slate-400 hover:text-white relative rounded-xl hover:bg-slate-900 transition-all"
+                >
+                  <Icon name="bell" className="w-5 h-5" />
+                  {userUnreadNotifs.length > 0 && (
+                    <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full animate-pulse"></span>
+                  )}
+                </button>
+
+                {/* NOTIFICATIONS DROPDOWN */}
+                {showNotifPanel && (
+                  <div className="absolute left-0 sm:right-0 sm:left-auto mt-2 w-80 bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl z-50 p-4 space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <span className="font-bold text-xs text-white">Notifications</span>
+                      <button 
+                        onClick={() => {
+                          setNotifications(prev => prev.map(n => n.userId === currentUser.id ? { ...n, read: true } : n));
+                        }}
+                        className="text-[10px] text-indigo-400 hover:underline"
+                      >
+                        Mark all as read
+                      </button>
+                    </div>
+                    <div className="max-h-60 overflow-y-auto divide-y divide-slate-800/60 text-xs">
+                      {userNotifs.length === 0 ? (
+                        <div className="py-4 text-center text-slate-500 text-[11px]">No notifications yet.</div>
+                      ) : (
+                        userNotifs.map(n => (
+                          <div key={n.id} className={`py-2.5 ${n.read ? 'opacity-60' : 'font-semibold text-white'}`}>
+                            <div className="text-indigo-400 text-[11px] font-bold">{n.title}</div>
+                            <div className="text-[11px] text-slate-300 mt-0.5">{n.message}</div>
+                            <div className="text-[9px] text-slate-500 mt-1">{n.date}</div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ONLY ADMIN CAN SWITCH ROLES NOW */}
+            {currentUser.role === 'Admin' && (
+              <div className="p-4 mx-3 my-4 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Admin Role Simulation</label>
+                <div className="grid grid-cols-2 gap-1 bg-slate-950 p-1 rounded-lg">
+                  {['Admin', 'Employee', 'Department Head', 'Administrative Officer V', 'Chief of Hospital'].map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => {
+                        setCurrentUser({ ...currentUser, role: r });
+                        triggerToast(`Simulating Role View: ${r}`);
+                      }}
+                      className={`py-1 text-[9px] font-bold rounded ${currentUser.role === r ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}
+                    >
+                      {r === 'Administrative Officer V' ? 'Admin Off V' : r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* NAV LINKS */}
+            <nav className="flex-1 px-3 space-y-1 mt-4">
+              <button 
+                onClick={() => setActiveTab('dashboard')} 
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-semibold ${activeTab === 'dashboard' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-900'}`}
+              >
+                <Icon name="sliders" className="w-4 h-4" />
+                <span>Dashboard</span>
+              </button>
+
+              <button 
+                onClick={() => setActiveTab('new-request')} 
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-semibold ${activeTab === 'new-request' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-900'}`}
+              >
+                <Icon name="plus" className="w-4 h-4" />
+                <span>File New Request</span>
+              </button>
+
+              <button 
+                onClick={() => setActiveTab('archives')} 
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-semibold ${activeTab === 'archives' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-900'}`}
+              >
+                <Icon name="archive" className="w-4 h-4" />
+                <span>My Archival Copies ({myArchivedCopies.length})</span>
+              </button>
+
+              {isApprover && (
+                <button 
+                  onClick={() => setActiveTab('approvals')} 
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-semibold ${activeTab === 'approvals' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-900'}`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <Icon name="user-check" className="w-4 h-4" />
+                    <span>Approvals Queue</span>
+                  </div>
+                  {visibleRequests.filter(r => r.status.includes('Pending')).length > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-bold text-[10px]">
+                      {visibleRequests.filter(r => r.status.includes('Pending')).length}
+                    </span>
+                  )}
+                </button>
+              )}
+
+              {/* ADMIN ONLY TAB: USER MANAGEMENT */}
+              {currentUser.role === 'Admin' && (
+                <button 
+                  onClick={() => setActiveTab('user-mgmt')} 
+                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-semibold ${activeTab === 'user-mgmt' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-900'}`}
+                >
+                  <Icon name="users" className="w-4 h-4" />
+                  <span>User Management</span>
+                </button>
+              )}
+            </nav>
+
+            <div className="p-4 border-t border-slate-800 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-white">{currentUser.name}</div>
+                <div className="text-[10px] text-indigo-400">{currentUser.role} {currentUser.headOfDept ? `(${currentUser.headOfDept})` : ''}</div>
+              </div>
+              <button onClick={() => setIsAuthenticated(false)} className="text-slate-400 hover:text-rose-400 p-2">
+                <Icon name="logout" className="w-4 h-4" />
+              </button>
+            </div>
+          </aside>
+
+          {/* MAIN CONTENT AREA */}
+          <main className="flex-1 p-6 space-y-6 overflow-y-auto">
+            {activeTab === 'dashboard' && (
+              <div className="space-y-6">
+                <div className="p-6 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Welcome, {currentUser.name}</h3>
+                    <p className="text-xs text-slate-400">Assigned Dept: {currentUser.dept} • Role: {currentUser.role}</p>
+                  </div>
+                  {currentUser.role === 'Admin' && (
+                    <span className="px-3 py-1 rounded-full bg-indigo-950 border border-indigo-500 text-indigo-300 text-xs font-bold">
+                      System Admin Full Visibility
+                    </span>
+                  )}
+                </div>
+
+                {/* ADMIN ACCOUNT ACTIVATION & DEPT HEAD TAGGING PANEL */}
+                {currentUser.role === 'Admin' && (
+                  <div className="bg-slate-950 rounded-2xl border border-indigo-500/30 p-5 shadow-2xl space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                      <div className="flex items-center space-x-2">
+                        <Icon name="shield-check" className="w-5 h-5 text-indigo-400" />
+                        <h4 className="font-bold text-white text-sm">Pending Registration Approvals & Tagging</h4>
+                      </div>
+                      <span className="px-3 py-1 rounded-full bg-indigo-950 border border-indigo-800 text-indigo-300 text-xs font-semibold">
+                        {employees.filter((e) => e.status === 'Pending').length} Pending Activation
+                      </span>
+                    </div>
+
+                    {employees.filter((e) => e.status === 'Pending').length === 0 ? (
+                      <div className="p-4 text-center text-slate-500 text-xs">
+                        No pending registration requests requiring account activation.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-800">
+                        {employees
+                          .filter((e) => e.status === 'Pending')
+                          .map((pendingEmp) => (
+                            <div key={pendingEmp.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div className="space-y-1">
+                                <div className="font-semibold text-xs text-white">{pendingEmp.name} ({pendingEmp.email})</div>
+                                <div className="text-[11px] text-slate-400">
+                                  Role: <span className="text-indigo-400 font-semibold">{pendingEmp.role}</span>
+                                </div>
+
+                                {/* ADMIN TAGGING SELECTOR FOR DEPARTMENT HEADS */}
+                                {pendingEmp.role === 'Department Head' && (
+                                  <div className="mt-2 flex items-center space-x-2">
+                                    <span className="text-[11px] text-amber-400 font-bold">Assign Department:</span>
+                                    <select 
+                                      value={pendingEmp.headOfDept || 'Medical Section'} 
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setEmployees(prev => prev.map(emp => emp.id === pendingEmp.id ? { ...emp, dept: val, headOfDept: val } : emp));
+                                      }}
+                                      className="bg-slate-900 border border-amber-500/50 rounded-lg px-2 py-1 text-xs text-white"
+                                    >
+                                      {HOSPITAL_DEPARTMENTS.map(d => (
+                                        <option key={d} value={d}>{d}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex items-center space-x-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEmployees(prev => prev.filter(e => e.id !== pendingEmp.id));
+                                    triggerToast(`Account for ${pendingEmp.name} rejected and removed.`, 'error');
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white text-xs font-semibold border border-rose-500/40 transition-all flex items-center space-x-1"
+                                >
+                                  <Icon name="x" className="w-3.5 h-3.5" />
+                                  <span>Reject</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEmployees(prev => prev.map(e => e.id === pendingEmp.id ? { ...e, status: 'Approved' } : e));
+                                    triggerToast(`Account for ${pendingEmp.name} activated & tagged!`);
+                                  }}
+                                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md flex items-center space-x-1"
+                                >
+                                  <Icon name="check" className="w-3.5 h-3.5" />
+                                  <span>Activate Account</span>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* RECENT TRANSACTIONS TABLE */}
+                <div className="bg-slate-950 rounded-2xl border border-slate-800 p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-sm text-white">System Applications & Workflows</h4>
+                    {currentUser.role === 'Admin' && (
+                      <span className="text-[11px] text-indigo-400 font-semibold">Viewing All Hospital Transactions</span>
+                    )}
+                  </div>
+                  
+                  <div className="divide-y divide-slate-800">
+                    {visibleRequests.length === 0 ? (
+                      <div className="py-6 text-center text-slate-500 text-xs">No transactions recorded for this view.</div>
+                    ) : (
+                      visibleRequests.map((req) => (
+                        <div key={req.id} className="py-3 flex items-center justify-between text-xs">
+                          <div>
+                            <div className="font-bold text-indigo-400">{req.id} — {req.type} ({req.subType})</div>
+                            <div className="text-slate-400 mt-0.5">Applicant: <strong className="text-slate-200">{req.applicantName}</strong> • Section: {req.section}</div>
+                          </div>
+                          <div className="flex items-center space-x-3">
+                            <StatusBadge status={req.status} />
+                            <button 
+                              onClick={() => setSelectedRequestForModal(req)}
+                              className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white transition-all"
+                            >
+                              Details
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: ADMIN USER MANAGEMENT PANEL */}
+            {activeTab === 'user-mgmt' && currentUser.role === 'Admin' && (
+              <div className="space-y-6">
+                <div className="bg-slate-950 rounded-2xl border border-slate-800 p-5 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h3 className="font-bold text-white text-base">Registered System Users Directory</h3>
+                    <span className="text-xs text-indigo-400 font-semibold">{employees.length} Total Registered Users</span>
+                  </div>
+
+                  <div className="divide-y divide-slate-800">
+                    {employees.map((u) => (
+                      <div key={u.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                        <div>
+                          <div className="font-bold text-white text-sm">{u.name}</div>
+                          <div className="text-slate-400">
+                            {u.email} • Role: <strong className="text-indigo-400">{u.role}</strong> • Dept: {u.dept}
+                          </div>
+                          <div className="mt-1">
+                            Status: <span className={`font-bold ${u.status === 'Approved' ? 'text-emerald-400' : u.status === 'Deactivated' ? 'text-rose-400' : 'text-amber-400'}`}>{u.status}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <button 
+                            onClick={() => setEditingUser(u)}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 flex items-center space-x-1"
+                          >
+                            <Icon name="edit" className="w-3.5 h-3.5" />
+                            <span>Edit</span>
+                          </button>
+                          
+                          <button 
+                            onClick={() => handleToggleUserStatus(u.id)}
+                            className={`px-2.5 py-1 rounded-lg flex items-center space-x-1 ${u.status === 'Deactivated' ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-600/20 text-amber-300 border border-amber-500/30'}`}
+                          >
+                            <Icon name="power" className="w-3.5 h-3.5" />
+                            <span>{u.status === 'Deactivated' ? 'Activate' : 'Deactivate'}</span>
+                          </button>
+
+                          <button 
+                            onClick={() => handleDeleteUser(u.id)}
+                            className="px-2.5 py-1 rounded-lg bg-rose-600/20 text-rose-300 hover:bg-rose-600 hover:text-white border border-rose-500/30 flex items-center space-x-1"
+                          >
+                            <Icon name="trash-2" className="w-3.5 h-3.5" />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: ARCHIVAL COPIES */}
+            {activeTab === 'archives' && (
+              <div className="bg-slate-950 rounded-2xl border border-slate-800 p-5 space-y-4">
+                <h3 className="font-bold text-white text-base">Personal Archival Reference Copies</h3>
+                <p className="text-xs text-slate-400">Archived copies of all your processed requests (Approved or Declined) saved for reference.</p>
+                
+                <div className="divide-y divide-slate-800">
+                  {myArchivedCopies.length === 0 ? (
+                    <div className="py-6 text-center text-slate-500 text-xs">No archived copies found.</div>
+                  ) : (
+                    myArchivedCopies.map(arc => (
+                      <div key={arc.id} className="py-3 flex items-center justify-between text-xs">
+                        <div>
+                          <div className="font-bold text-indigo-400">{arc.originalReqId} — {arc.type}</div>
+                          <div className="text-slate-400 mt-0.5">Archived: {arc.archivedDate} • Reason: {arc.reason}</div>
+                        </div>
+                        <StatusBadge status={arc.status} />
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* NEW REQUEST FORM */}
+            {activeTab === 'new-request' && (
+              <div className="max-w-2xl mx-auto bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-6">
+                <div>
+                  <h3 className="text-lg font-bold text-white">File New Hospital Application</h3>
+                  <p className="text-xs text-slate-400 mt-1">Application will follow sequential approval: Department Head → Administrative Officer V / Chief of Hospital.</p>
+                </div>
+
+                <form onSubmit={handleFormSubmit} className="space-y-4 text-xs">
+                  <div>
+                    <label className="text-slate-300 font-bold block mb-1">Target Hospital Section</label>
+                    <select 
+                      value={formData.section} 
+                      onChange={e => setFormData({...formData, section: e.target.value})}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                    >
+                      {HOSPITAL_DEPARTMENTS.map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-slate-300 font-bold block mb-1">Application Type</label>
+                    <select 
+                      value={formType} 
+                      onChange={e => {
+                        setFormType(e.target.value);
+                        if (e.target.value === 'Leave') setFormData(prev => ({ ...prev, subType: 'Vacation Leave' }));
+                        else if (e.target.value === 'Missed Log') setFormData(prev => ({ ...prev, subType: 'Time-In & Time-Out Correction' }));
+                        else if (e.target.value === 'Extra Off Request') setFormData(prev => ({ ...prev, subType: 'Compensatory Extra Off' }));
+                        else if (e.target.value === 'Exchange of Duty') setFormData(prev => ({ ...prev, subType: 'Shift Swap Request' }));
+                      }}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                    >
+                      <option value="Missed Log">Missed Log / Time Correction</option>
+                      <option value="Exchange of Duty">Exchange of Duty / Duty Swap</option>
+                      <option value="Extra Off Request">Extra Off Request</option>
+                      <option value="Leave">Leave Application</option>
+                    </select>
+                  </div>
+
+                  {formType === 'Missed Log' && (
+                    <div className="p-4 bg-slate-900/80 rounded-xl border border-slate-800 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="text-slate-300 block mb-1">Log Date</label>
+                          <input 
+                            type="date" required value={formData.logDate} 
+                            onChange={e => setFormData({...formData, logDate: e.target.value})}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-slate-300 block mb-1">Actual Time-In</label>
+                          <input 
+                            type="text" required placeholder="08:00 AM" value={formData.timeIn} 
+                            onChange={e => setFormData({...formData, timeIn: e.target.value})}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-slate-300 block mb-1">Actual Time-Out</label>
+                          <input 
+                            type="text" required placeholder="05:00 PM" value={formData.timeOut} 
+                            onChange={e => setFormData({...formData, timeOut: e.target.value})}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="text-slate-300 font-bold block mb-1">Reason / Justification</label>
+                    <textarea 
+                      required rows="3" 
+                      placeholder="Detailed justification..."
+                      value={formData.reason} 
+                      onChange={e => setFormData({...formData, reason: e.target.value})}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white"
+                    />
+                  </div>
+
+                  <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg">
+                    Submit Request to Department Head
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {/* SEQUENTIAL APPROVALS QUEUE */}
+            {activeTab === 'approvals' && isApprover && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-bold text-white">Approvals Queue Dashboard</h3>
+                <div className="space-y-3">
+                  {visibleRequests.filter(r => r.status.includes('Pending')).length === 0 ? (
+                    <div className="p-6 bg-slate-950 rounded-2xl border border-slate-800 text-center text-slate-500 text-xs">
+                      No pending requests currently awaiting your level of approval.
+                    </div>
+                  ) : (
+                    visibleRequests.filter(r => r.status.includes('Pending')).map((req) => (
+                      <div key={req.id} className="p-5 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-bold text-indigo-400 text-xs">{req.id} — {req.type}</div>
+                            <div className="text-xs text-white font-semibold">{req.applicantName} ({req.section})</div>
+                          </div>
+                          <StatusBadge status={req.status} />
+                        </div>
+
+                        <p className="text-xs text-slate-300 bg-slate-900 p-3 rounded-xl">Reason: {req.reason}</p>
+
+                        {/* STAGE STATUS */}
+                        <div className="text-[11px] text-slate-400 flex items-center space-x-4">
+                          <span>Stage 1 Dept Head: <strong className={req.deptHeadApproval === 'Approved' ? 'text-emerald-400' : 'text-amber-400'}>{req.deptHeadApproval}</strong></span>
+                          <span>Stage 2 Final Officer: <strong className={req.finalApproval === 'Approved' ? 'text-emerald-400' : 'text-amber-400'}>{req.finalApproval}</strong></span>
+                        </div>
+
+                        <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-900">
+                          <button 
+                            onClick={() => handleApprovalAction(req.id, 'REJECT')}
+                            className="px-3 py-1.5 rounded-xl bg-rose-600/20 text-rose-300 border border-rose-500/40 text-xs font-bold hover:bg-rose-600 hover:text-white"
+                          >
+                            Decline Request
+                          </button>
+
+                          {/* ENABLE APPROVE IF ROLE MATCHES STEP */}
+                          {currentUser.role === 'Department Head' && req.deptHeadApproval === 'Pending' && (
+                            <button 
+                              onClick={() => handleApprovalAction(req.id, 'APPROVE')}
+                              className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
+                            >
+                              Approve (Dept Head Step)
+                            </button>
+                          )}
+
+                          {['Administrative Officer V', 'Chief of Hospital'].includes(currentUser.role) && req.deptHeadApproval === 'Approved' && req.finalApproval === 'Pending' && (
+                            <button 
+                              onClick={() => handleApprovalAction(req.id, 'APPROVE')}
+                              className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
+                            >
+                              Grant Final Approval
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </main>
+
+          {/* EDIT USER MODAL (ADMIN ONLY) */}
+          {editingUser && (
+            <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <form onSubmit={handleSaveEditedUser} className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-6 space-y-4 shadow-2xl text-xs">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <span className="font-bold text-white text-sm">Edit User Details</span>
+                  <button type="button" onClick={() => setEditingUser(null)} className="text-slate-400 hover:text-white">
+                    <Icon name="x" className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div>
+                  <label className="text-slate-300 block mb-1">Full Name</label>
+                  <input 
+                    type="text" required value={editingUser.name} 
+                    onChange={e => setEditingUser({...editingUser, name: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-300 block mb-1">Email</label>
+                  <input 
+                    type="email" required value={editingUser.email} 
+                    onChange={e => setEditingUser({...editingUser, email: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-slate-300 block mb-1">Role</label>
+                    <select 
+                      value={editingUser.role} 
+                      onChange={e => setEditingUser({...editingUser, role: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-2 text-white"
+                    >
+                      <option value="Admin">Admin</option>
+                      <option value="Employee">Employee</option>
+                      <option value="Department Head">Department Head</option>
+                      <option value="Administrative Officer V">Admin Officer V</option>
+                      <option value="Chief of Hospital">Chief of Hospital</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-slate-300 block mb-1">Department</label>
+                    <select 
+                      value={editingUser.dept} 
+                      onChange={e => setEditingUser({...editingUser, dept: e.target.value, headOfDept: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2 py-2 text-white"
+                    >
+                      {HOSPITAL_DEPARTMENTS.map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl mt-2">
+                  Save Changes
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* REQUEST DETAILS MODAL */}
+          {selectedRequestForModal && (
+            <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl p-6 space-y-4 shadow-2xl text-xs text-white">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <span className="font-bold text-indigo-400">{selectedRequestForModal.id} Details</span>
+                  <button onClick={() => setSelectedRequestForModal(null)} className="text-slate-400 hover:text-white">
+                    <Icon name="x" className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <div>Type: <strong>{selectedRequestForModal.type} ({selectedRequestForModal.subType})</strong></div>
+                  <div>Applicant: <strong>{selectedRequestForModal.applicantName}</strong></div>
+                  <div>Section: <strong>{selectedRequestForModal.section}</strong></div>
+                  <div>Date Filed: {selectedRequestForModal.dateFiled}</div>
+                  <div>Status: <StatusBadge status={selectedRequestForModal.status} /></div>
+                  <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-slate-300">
+                    Reason: {selectedRequestForModal.reason}
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <button onClick={() => setSelectedRequestForModal(null)} className="px-4 py-2 bg-slate-800 text-white rounded-xl">
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* PRINTABLE FORM MODAL (STRICTLY FOR FULLY APPROVED REQUESTS) */}
+          {printModalRequest && printModalRequest.status === 'Approved' && (
+            <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white text-slate-900 w-full max-w-xl rounded-2xl p-6 space-y-4 shadow-2xl">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <span className="text-xs font-bold uppercase text-slate-500">Official Fully Approved Hospital Form</span>
+                  <button onClick={() => setPrintModalRequest(null)} className="text-slate-500 hover:text-black">
+                    <Icon name="x" className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="font-bold text-base text-indigo-950">{printModalRequest.id} - {printModalRequest.type}</div>
+                  <div>Applicant: <strong>{printModalRequest.applicantName}</strong></div>
+                  <div>Section: <strong>{printModalRequest.section}</strong></div>
+                  <div>Workflow Status: <span className="text-emerald-600 font-bold">Approved By Dept Head & Officer</span></div>
+                  <div>Reason: <em>{printModalRequest.reason}</em></div>
+                </div>
+
+                <div className="pt-6 grid grid-cols-2 gap-4 text-center text-xs border-t">
+                  <div>
+                    <div className="font-bold border-b pb-1">Department Head</div>
+                    <div className="text-[10px] text-slate-500">Stage 1 Approval Granted</div>
+                  </div>
+                  <div>
+                    <div className="font-bold border-b pb-1">Chief of Hospital / Admin Officer V</div>
+                    <div className="text-[10px] text-slate-500">Stage 2 Final Approval Granted</div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-2 pt-2">
+                  <button onClick={() => window.print()} className="px-4 py-2 bg-indigo-600 text-white font-bold text-xs rounded-xl">
+                    Print Official Form
+                  </button>
+                  <button onClick={() => setPrintModalRequest(null)} className="px-4 py-2 bg-slate-200 text-slate-800 font-bold text-xs rounded-xl">
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function StatusBadge({ status }) {
+      if (status === 'Approved') {
+        return <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">Approved</span>;
+      }
+      if (status === 'Rejected') {
+        return <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-950 text-rose-400 border border-rose-800">Declined / Terminated</span>;
+      }
+      return <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-950 text-amber-400 border border-amber-800">{status}</span>;
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
